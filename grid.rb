@@ -1,29 +1,60 @@
 require "io/console"
 
 class Grid
-  RED = 41
+  DEFAULT_COLOR = 49
 
   def initialize(width, height, origin)
     @width = width
     @height = height
     @origin = origin
-    @state_arr = Array.new(@height) {Array.new(@width, 'X')}
+    @state_arr = Array.new(@height) {Array.new(@width) {{text:' ', color: DEFAULT_COLOR}}}
   end
 
-  def render
+  def render(pattern = nil, color = nil)
+    patterns(pattern,color)
     origin_x = @origin[0]
     origin_y = @origin[1]
-    print "\e[#{origin_y + 1};#{origin_x + 1}H"
 
     @state_arr.each_with_index do |row,i|
-      row.each do |state|
-        print "\e[41m #{state} \e[0m"
+      print "\e[#{origin_y + i};#{origin_x}H"
+      row.each_with_index do |cell,j|
+        yield(i,j,cell) if block_given?
+        print "\e[#{cell[:color]}m #{cell[:text]} \e[0m"
       end
-      print "\n"
-      print "\e[#{origin_y + 1 + i};#{origin_x + 1}H"
     end
   end
 
+  def colors(color)
+    case color
+    when 'black'
+      40
+    when 'red'
+      41
+    when 'green'
+      42
+    when 'yellow'
+      43
+    when 'blue'
+      44
+    when 'magenta'
+      45
+    when 'cyan'
+      46
+    when 'white'
+      47
+    end
+  end
+  
+  def get_state
+    coordinates = get_mouse_input
+    row = coordinates[0]
+    column = coordinates[1]
+
+    @state_arr[row][column]
+  end
+
+  private
+  
   def get_mouse_input
     print "\e[?1000h" "\e[?1006h"
     mouse_input = ''
@@ -33,17 +64,15 @@ class Grid
       end
     end
     print "\e[?1000l"
-    coordinates = parse_input(mouse_input)
-    create_window(coordinates)
-  end
-  
-  private
+    coordinates = create_window(parse_input(mouse_input))
+    coordinates
+  end 
 
   def parse_input(event)
     event = event.split(';')
     x_axis = event[1]
     y_axis = event[2]
-    [x_axis.to_i,y_axis.to_i] 
+    [y_axis.to_i,x_axis.to_i] 
   end
 
   def create_window(coordinates)
@@ -55,28 +84,47 @@ class Grid
   end 
 
   def coordinate_in_range(coordinates)
-    x_axis = coordinates[0]
-    y_axis = coordinates[1]
+    y_axis = coordinates[0]
+    x_axis = coordinates[1]
     
-    x_axis.between?(1,@width) && y_axis.between?(1,@height)
+    x_axis.between?(0,@width - 1) && y_axis.between?(0,@height - 1)
   end
 
   def transform(coordinates)
-    x_axis = coordinates[0]
-    y_axis = coordinates[1]
+    y_axis = coordinates[0]
+    x_axis = coordinates[1]
 
     origin_x = @origin[0]
     origin_y = @origin[1]
 
     x_offset = x_axis - origin_x
-    y_offset = y_axis - origin_y
+    
+    case x_offset % 3
+    when 0
+      x_offset = x_offset/3
+    when 1
+      x_offset = (x_offset - 1)/3
+    when 2
+      x_offset = (x_offset - 2)/3
+    end
 
-    [x_offset,y_offset]
+    y_offset = y_axis - origin_y
+    
+    [y_offset,x_offset]
   end
 
+  def patterns(pattern,color)
+    case pattern
+    when 'checkered'
+      @state_arr.each_with_index do |row,i|
+        row.each_with_index do |cell,j|
+          if j.even? && i.even? || j.odd? && i.odd?
+            cell[:color] = colors(color[0])
+          else
+            cell[:color] = colors(color[1])
+          end
+        end
+      end
+    end
+  end
 end
-
-#mouse = Grid.new(3,1,[10,10]).get_mouse_input
-grid = Grid.new(5,5,[10,10])
-grid.render
-p grid.get_mouse_input
