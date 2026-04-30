@@ -2,6 +2,7 @@ require "io/console"
 
 class Grid
   DEFAULT_COLOR = 49
+  attr_reader :state_arr
 
   def initialize(width, height, origin)
     @width = width
@@ -16,12 +17,13 @@ class Grid
     origin_y = @origin[1]
 
     @state_arr.each_with_index do |row,i|
-      print "\e[#{origin_y + i};#{origin_x}H"
+      change_cursor_position(origin_y + i,origin_x)
       row.each_with_index do |cell,j|
         yield(i,j,cell) if block_given?
-        print "\e[#{cell[:color]}m #{cell[:text]} \e[0m"
+        render_cell(cell[:color],cell[:text])
       end
     end
+    print "\n"
   end
 
   def colors(color)
@@ -45,28 +47,36 @@ class Grid
     end
   end
   
-  def get_state
-    coordinates = get_mouse_input
-    row = coordinates[0]
-    column = coordinates[1]
-
-    @state_arr[row][column]
-  end
-
-  private
-  
   def get_mouse_input
-    print "\e[?1000h" "\e[?1006h"
+    enable_mouse_input
     mouse_input = ''
-    STDIN.raw do 
+    STDIN.raw do |input|
       until mouse_input.include?('m')
-        mouse_input << STDIN.getch
+        mouse_input << input.getc
       end
     end
-    print "\e[?1000l"
+    disable_mouse_input
     coordinates = create_window(parse_input(mouse_input))
     coordinates
   end 
+
+  private
+
+  def enable_mouse_input
+    print "\e[?1000h" "\e[?1006h"
+  end
+
+  def disable_mouse_input
+    print "\e[?1000l"
+  end
+
+  def change_cursor_position(y_axis,x_axis)
+    print "\e[#{y_axis};#{x_axis}H"
+  end
+
+  def render_cell(color,text)
+    print "\e[#{color}m #{text} \e[0m"
+  end
 
   def parse_input(event)
     event = event.split(';')
@@ -97,16 +107,7 @@ class Grid
     origin_x = @origin[0]
     origin_y = @origin[1]
 
-    x_offset = x_axis - origin_x
-    
-    case x_offset % 3
-    when 0
-      x_offset = x_offset/3
-    when 1
-      x_offset = (x_offset - 1)/3
-    when 2
-      x_offset = (x_offset - 2)/3
-    end
+    x_offset = (x_axis - origin_x) / 3
 
     y_offset = y_axis - origin_y
     
