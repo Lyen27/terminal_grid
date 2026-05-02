@@ -2,6 +2,7 @@ require "io/console"
 
 class Grid
   DEFAULT_COLOR = 49
+  MOUSE_REGEX = /\e\[<0;(\d+);(\d+)m/
   attr_reader :state_arr
 
   def initialize(width, height, origin)
@@ -48,16 +49,23 @@ class Grid
   end
   
   def get_mouse_input
-    enable_mouse_input
-    mouse_input = ''
-    STDIN.raw do |input|
-      until mouse_input.include?('m')
-        mouse_input << input.getc
+    loop do
+      enable_mouse_input
+      buffer = ''
+      mouse_input = ''
+      STDIN.raw do |input|
+        loop do
+          buffer << input.getc
+          if (match = buffer.match(MOUSE_REGEX))
+            mouse_input = [match[2].to_i,match[1].to_i]
+            break
+          end
+        end
       end
+      disable_mouse_input
+      coordinates = transform(mouse_input)
+      return coordinates if coordinate_in_range(coordinates)
     end
-    disable_mouse_input
-    coordinates = create_window(parse_input(mouse_input))
-    coordinates
   end 
 
   private
@@ -77,21 +85,6 @@ class Grid
   def render_cell(color,text)
     print "\e[#{color}m #{text} \e[0m"
   end
-
-  def parse_input(event)
-    event = event.split(';')
-    x_axis = event[1]
-    y_axis = event[2]
-    [y_axis.to_i,x_axis.to_i] 
-  end
-
-  def create_window(coordinates)
-    coordinates = transform(coordinates)
-    until coordinate_in_range(coordinates)
-      coordinates = get_mouse_input
-    end
-    coordinates
-  end 
 
   def coordinate_in_range(coordinates)
     y_axis = coordinates[0]
